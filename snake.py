@@ -22,10 +22,12 @@ CYAN = (0, 255, 255)
 
 COLORS = [RED, BLUE, YELLOW, CYAN]
 
+# pixels per unit block
 CELL_SIZE = 8
 
 screen = pygame.display.set_mode(size)
 
+# borders
 wall1 = [[0, x] for x in range(100)]
 wall2 = [[99, x] for x in range(100)]
 wall3 = [[x, 0] for x in range(100)]
@@ -73,13 +75,17 @@ class Snake:
         self.bodies.insert(0, head)
 
     def is_dead(self):
+        # judge whether the snake bites itself.
         checknum = 0
         for body in self.bodies:
+            # skip the head.
             if checknum == 0:
                 checknum += 1
             else:
                 if body == self.bodies[0]:
                     return True
+                
+        # judge whether the snake hit the wall.
         for block in walls:
             if block == self.bodies[0]:
                 return True
@@ -89,12 +95,14 @@ class Snake:
 class Food:
 
     def __init__(self, snake_body):
+        # initialize food randomly, if it's on the snake, redo it.
         while True:
             self.position = [random.randint(1, 98), random.randint(1, 98)]
             if self.is_on_the_snake(snake_body) == 0:
                 break
         self.color = random.choice(COLORS)
-        self.exist_time = 0
+        
+        # control the frequency of food appearence.
         self.frequency = 0.03
         if random.random() <= self.frequency:
             self.valid = True
@@ -123,7 +131,7 @@ def main():
     foods = []
     new_dir = ''
 
-    pygame.display.set_caption('贪吃蛇')
+    pygame.display.set_caption('Snake')
 
     # main loop
     while True:
@@ -139,7 +147,8 @@ def main():
                 WHITE,
                 (block[0] * CELL_SIZE, block[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE)
             )
-
+        
+        # player operations
         if event.type == KEYDOWN:
             if event.key == K_DOWN:
                 new_dir = 'down'
@@ -156,26 +165,32 @@ def main():
         if snake.direction == 'up' or snake.direction == 'down':
             if new_dir == 'left' or new_dir == 'right':
                 snake.direction = new_dir
-
+        
+        # new food
         new_food = Food(snake.bodies)
         if new_food.valid and len(foods) < 20:
             foods.append(new_food)
 
+        # draw the snake.
         snake.draw()
+        
+        # quit if the snake dies.
         if snake.is_dead():
             return 0
+        
+        # whether the snake eats the food.
         for food in foods:
             if snake.bodies[0] == food.position:
                 eat = 1
                 foods.remove(food)
             else:
                 food.draw()
+        
+        # move the snake.
         snake.move(eat)
 
         pygame.display.flip()
 
-
-print("Game Over!")
 
 if __name__ == "__main__":
     main()
