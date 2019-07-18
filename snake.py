@@ -13,11 +13,8 @@ BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 DARKGREEN = (0, 155, 0)
-DARKGRAY = (40, 40, 40)
 YELLOW = (255, 255, 0)
-Red_DARK = (150, 0, 0)
 BLUE = (0, 0, 255)
-BLUE_DARK = (0, 0, 150)
 CYAN = (0, 255, 255)
 
 COLORS = [RED, BLUE, YELLOW, CYAN]
