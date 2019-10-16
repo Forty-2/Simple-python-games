@@ -1,9 +1,15 @@
 import sys
 import random
+from functools import lru_cache
 import pygame
+import time
 
+sys.setrecursionlimit(99999)
 pygame.init()
-size = width, height = 600, 400
+
+M, N = 30, 20
+CELL_SIZE = 20
+size = width, height = M * CELL_SIZE, N * CELL_SIZE
 
 # colors
 WHITE = (255, 255, 255)
@@ -19,9 +25,6 @@ BLUE_DARK = (0, 0, 150)
 CYAN = (0, 255, 255)
 BROWN = (115, 74, 18)
 
-CELL_SIZE = 20
-M = int(size[0] / CELL_SIZE)
-N = int(size[1] / CELL_SIZE)
 
 flag = "flag.png"
 mine = "mine.png"
@@ -33,10 +36,11 @@ class Block:
 
     def __init__(self, prop, x, y):
         self.prop = prop
-        self.status = 0  # 0: undetected, 1: detected
+        self.status = 0  # 0: undetected, -1: detected, 1: flagged
         self.press = 0
         self.position = x, y
         self.dangers = 0
+        self.scanned = 0
 
     def draw(self):
         # pressed
@@ -149,58 +153,117 @@ def get_mines_around(blocks, a, b):
 def generate_mine(n=10):
     mine_set = set()
     while True:
-        x = random.randint(0, M)
-        y = random.randint(0, N)
+        x = random.randint(0, M-1)
+        y = random.randint(0, N-1)
         mine_set.add((x, y))
         if len(mine_set) == n:
             break
     return mine_set
 
 
-def fail(t):
-    font = pygame.font.Font("/System/Library/Fonts/Courier.dfont", 90)
-    te = font.render('BOOM!!!', 0, RED)
+def message(words, color):
+    screen.fill(BLACK)
+    font = pygame.font.Font(None, 90)
+    te = font.render(words, 0, color)
+    te_rect = te.get_rect()
     center = [width / 2, height / 2]
-    textpos = te.get_rect(center=center)
-    screen.blit(te, textpos)
-    time.sleep(int(t))
+    te_rect.center = center
+    screen.blit(te, te_rect)
+    pygame.display.flip()
+
+
+# @lru_cache(3)
+def find_safe_zone(a, b, blocks):
+    cor = (a, b)
+    safe_zone = set()
+    blocks[a][b].scanned = 1
+    if blocks[a][b].dangers > 0:
+        safe_zone.add(cor)
+    else:
+        safe_zone.add(cor)
+        if 0<=a-1 and blocks[a-1][b].scanned == 0:
+            set_t = find_safe_zone(a-1, b, blocks)
+            safe_zone = safe_zone.union(set_t)
+        if a+1<M and blocks[a+1][b].scanned == 0:
+            set_t = find_safe_zone(a+1, b, blocks)
+            safe_zone = safe_zone.union(set_t)
+        if b-1>=0 and blocks[a][b-1].scanned == 0:
+            set_t = find_safe_zone(a, b-1, blocks)
+            safe_zone = safe_zone.union(set_t)
+        if b+1<N and blocks[a][b+1].scanned == 0:
+            set_t = find_safe_zone(a, b+1, blocks)
+            safe_zone = safe_zone.union(set_t)
+        if 0<=a-1 and b>=1 and blocks[a-1][b-1].scanned == 0:
+            set_t = find_safe_zone(a-1, b-1, blocks)
+            safe_zone = safe_zone.union(set_t)
+        if 0<=a-1 and b+1<N and blocks[a-1][b+1].scanned == 0:
+            set_t = find_safe_zone(a-1, b+1, blocks)
+            safe_zone = safe_zone.union(set_t)
+        if a+1<M and b-1>=0 and blocks[a+1][b-1].scanned == 0:
+            set_t = find_safe_zone(a+1, b-1, blocks)
+            safe_zone = safe_zone.union(set_t)
+        if a+1<M and b+1<N and blocks[a+1][b+1].scanned == 0:
+            set_t = find_safe_zone(a+1, b+1, blocks)
+            safe_zone = safe_zone.union(set_t)
+    return safe_zone
 
 
 def main():
     blocks = [[] for i in range(M)]
-    mines = generate_mine(30)
+    mines = generate_mine(60)
+    detected = set()
+    whole = set((x,y) for x in range(M) for y in range(N))
+    whole = whole.difference(mines)
+    # generate minefield
     for i in range(M):
         for j in range(N):
             if (i, j) in mines:
                 blocks[i].append(Block(1, i, j))
             else:
                 blocks[i].append(Block(0, i, j))
+    # calculate bombs around the blocks
     for i in range(M):
         for j in range(N):
             blocks[i][j].dangers = get_mines_around(blocks, i, j)
-    pygame.display.set_caption('扫雷')
+    pygame.display.set_caption('Mine Sweeper')
     a, b = 0, 0
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                pygame.quit()
                 sys.exit()
             elif event.type == pygame.MOUSEBUTTONUP:
                 if get_pressed(event.pos) == (a, b):
                     if event.button == 1:
                         blocks[a][b].left_button_up()
+                        if blocks[a][b].dangers == 0:
+                            safe_zone = find_safe_zone(a, b, blocks)
+                            for (x, y) in safe_zone:
+                                blocks[x][y].status = -1
+                        # fail
+                        if blocks[a][b].prop == 1:
+                            t = time.time()
+                            while time.time()-t < 4:
+                                for _ in pygame.event.get():
+                                    pass
+                                message('You Failed!', RED)
+                            pygame.quit()
+                        detected.add((a, b))
+                        if detected == whole:
+                            print('success')
+                            message('You Win!', BLUE)
                     elif event.button == 3:
                         blocks[a][b].right_button_up()
                 else:
                     blocks[a][b].press = 0
-                print('[mouse button up]', ' #', event.pos, event.button, 'Number:', get_pressed(event.pos))
-                print(blocks[a][b].dangers)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 a, b = get_pressed(event.pos)
                 blocks[a][b].button_down()
-                print('[mouse button down]', ' #', event.pos, event.button)
 
+        # draw the background
         screen.fill(BLACK)
 
+        # draw the blocks
         for row in blocks:
             for block in row:
                 block.draw()
@@ -208,13 +271,9 @@ def main():
                     if block.dangers > 0 and block.prop == 0:
                         block.text()
 
-        # if blocks[a][b].prop == 1:
-        #     fail(3)
-        #     sys.exit()
-
         pygame.display.flip()
 
-    sys.exit()
+    pygame.quit()
 
 
 if __name__ == '__main__':
